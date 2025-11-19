@@ -1,0 +1,7 @@
+halma\ClientHandler.class
+halma\HalmaClient.class
+halma\HalmaBoard.class
+halma\HalmaGameUI$RunnableAction.class
+halma\Launcher.class
+halma\HalmaServer.class
+halma\HalmaGameUI.class
