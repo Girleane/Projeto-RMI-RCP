@@ -11,6 +11,7 @@ interface IHalmaServer extends Remote {
     void enviarMovimento(int playerId, List<Point> sequencia) throws RemoteException;
     void enviarChat(int playerId, String mensagem) throws RemoteException;
     void desconectar(int playerId) throws RemoteException;
+    void solicitarReinicio(int playerId) throws RemoteException; // NOVO MÉTODO
 }
 
 // Interface que o Cliente expõe para o Servidor (Callbacks)
@@ -22,6 +23,8 @@ interface IHalmaClient extends Remote {
     void definirTurno(boolean meuTurno) throws RemoteException;
 
     void notificarFimDeJogo(int idVencedor) throws RemoteException;
+
+    void notificarInicioJogo(String p1Name, String p2Name) throws RemoteException;
 
     void ping() throws RemoteException; // Para verificar se o cliente ainda está vivo
 

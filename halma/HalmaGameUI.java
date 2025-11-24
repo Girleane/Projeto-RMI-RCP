@@ -25,6 +25,8 @@ public class HalmaGameUI extends JFrame {
     private String[] playerNames = new String[3];
 
     private JLabel p1MovesLabel;
+    private JLabel p1NameLabel; // [NOVO] Referência para a label do nome do Jogador 1
+    private JLabel p2NameLabel; // [NOVO] Referência para a label do nome do Jogador 2
     private JLabel p2MovesLabel;
     private Point lastMove = null;
 
@@ -62,36 +64,35 @@ public class HalmaGameUI extends JFrame {
         Color headerFooterBg = new Color(60, 63, 65);
         Color headerTextColor = Color.WHITE;
 
-        JPanel topBar = new JPanel(new BorderLayout());
+        // [NOVO] Usando GridBagLayout para um controle de centralização mais preciso
+        JPanel topBar = new JPanel(new GridBagLayout());
         topBar.setBackground(headerFooterBg);
-        topBar.setPreferredSize(new Dimension(1200, 105));
+        topBar.setPreferredSize(new Dimension(1200, 115)); // Aumentei um pouco a altura
+        GridBagConstraints gbc = new GridBagConstraints();
 
         JLabel titleLabel = new JLabel("HALMA ONLINE", SwingConstants.CENTER);
         titleLabel.setFont(new Font("Arial", Font.BOLD, 50));
         titleLabel.setForeground(headerTextColor);
-        topBar.add(titleLabel, BorderLayout.CENTER);
 
         JPanel statusContainer = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 5));
         statusContainer.setOpaque(false);
-        statusContainer.setBorder(BorderFactory.createEmptyBorder(0, 10, 0, 0));
 
         p1StatusPanel = buildPlayerStatusPanel(1, player1Icon, scoreBgColor, scoreFgColor, scoreFont);
         p2StatusPanel = buildPlayerStatusPanel(2, player2Icon, scoreBgColor, scoreFgColor, scoreFont);
 
         statusContainer.add(p1StatusPanel);
         statusContainer.add(p2StatusPanel);
-        topBar.add(statusContainer, BorderLayout.WEST);
 
         JButton abandonBtn = new JButton("DESISTIR");
         abandonBtn.setFont(new Font("Arial", Font.BOLD, 12));
         abandonBtn.setPreferredSize(new Dimension(100, 30));
         abandonBtn.addActionListener(e -> {
             int choice = JOptionPane.showConfirmDialog(
-                    this,
-                    "Tem certeza que deseja desistir? Isso dara a vitoria ao seu adversario.",
-                    "Confirmacao de Desistencia",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.WARNING_MESSAGE);
+                this,
+                "Tem certeza que deseja desistir? Isso dara a vitoria ao seu adversario.",
+                "Confirmacao de Desistencia",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
 
             if (choice == JOptionPane.YES_OPTION) {
                 client.sendChat("ABANDON_GAME");
@@ -101,8 +102,17 @@ public class HalmaGameUI extends JFrame {
         JPanel eastPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 25, 35));
         eastPanel.setOpaque(false);
         eastPanel.add(abandonBtn);
-        topBar.add(eastPanel, BorderLayout.EAST);
 
+        // Adicionando os componentes ao topBar com GridBagLayout
+        gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 1.0; gbc.anchor = GridBagConstraints.WEST; gbc.insets = new Insets(0, 15, 0, 0);
+        topBar.add(statusContainer, gbc);
+
+        gbc.gridx = 1; gbc.gridy = 0; gbc.weightx = 0; gbc.anchor = GridBagConstraints.CENTER; gbc.insets = new Insets(0, 0, 0, 0);
+        topBar.add(titleLabel, gbc);
+
+        gbc.gridx = 2; gbc.gridy = 0; gbc.weightx = 1.0; gbc.anchor = GridBagConstraints.EAST; gbc.insets = new Insets(0, 0, 0, 15);
+        topBar.add(eastPanel, gbc);
+        
         add(topBar, BorderLayout.NORTH);
 
         JPanel boardPanel = new JPanel(new GridLayout(size, size));
@@ -164,8 +174,11 @@ public class HalmaGameUI extends JFrame {
     private boolean isTopLeftBase(int x, int y) { return (y >= 0 && y < baseSize) && (x >= 0 && x <= baseSize - 1 - y); }
     private boolean isBottomRightBase(int x, int y) { int rx = (size - 1) - x; int ry = (size - 1) - y; return (ry >= 0 && ry < baseSize) && (rx >= 0 && rx <= baseSize - 1 - ry); }
 
-    public void setPlayerNameLabel(int id, String name) { if (id < 1 || id > 2) return; playerNames[id] = name; refreshPlayerLabels(); }
-
+    public void setPlayerNameLabel(int id, String name) {
+        if (id < 1 || id > 2) return;
+        JLabel labelToUpdate = (id == 1) ? p1NameLabel : p2NameLabel;
+        if (labelToUpdate != null) labelToUpdate.setText(name);
+    }
     private void refreshPlayerLabels() {
         setPanelName(p1StatusPanel, 1, (playerNames[1] != null) ? playerNames[1] : "Aguardando");
         setPanelName(p2StatusPanel, 2, (playerNames[2] != null) ? playerNames[2] : "Aguardando");
@@ -179,7 +192,13 @@ public class HalmaGameUI extends JFrame {
     }
 
     public void addChatMessage(String msg) {
-        if (chatAreaField != null) { chatAreaField.append(msg + "\n"); chatAreaField.setCaretPosition(chatAreaField.getDocument().getLength()); }
+        if (chatAreaField != null) {
+            String finalMsg = msg;
+            // Se a mensagem não começar com '[', adiciona o prefixo do sistema.
+            if (!msg.trim().startsWith("[")) {
+                finalMsg = "[SISTEMA] " + msg;
+            }
+            chatAreaField.append(finalMsg + "\n"); chatAreaField.setCaretPosition(chatAreaField.getDocument().getLength()); }
     }
 
     public void clearChatArea() { if (chatAreaField != null) chatAreaField.setText(""); }
@@ -199,7 +218,7 @@ public class HalmaGameUI extends JFrame {
     }
 
     /**
-     * Atualiza os ícones de todos os botões com base no estado do HalmaBoard recebido.
+     * Atualiza os icones de todos os botões com base no estado do HalmaBoard recebido.
      * @param board O tabuleiro atualizado.
      * @param lastMove O ponto de destino do último movimento (para realce), pode ser null.
      */
@@ -343,37 +362,67 @@ public class HalmaGameUI extends JFrame {
     }
 
     private JPanel buildPlayerStatusPanel(int playerId, Icon icon, Color bg, Color fg, Font font) {
-        JPanel panel = new JPanel(new BorderLayout(10, 0));
-        panel.setBackground(bg);
-        panel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 15));
+        // Painel principal para cada jogador, com layout vertical
+        JPanel mainPlayerPanel = new JPanel();
+        mainPlayerPanel.setLayout(new BoxLayout(mainPlayerPanel, BoxLayout.Y_AXIS));
+        mainPlayerPanel.setOpaque(false); // Transparente para usar o fundo do cabeçalho
 
+        // --- Painel de Nome ---
+        JPanel namePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        namePanel.setOpaque(false);
         JLabel iconLabel = new JLabel(icon);
-        panel.add(iconLabel, BorderLayout.WEST);
-
-        // Nome do jogador (pode ser pego do array playerNames se necessário)
-        JLabel nameLabel = new JLabel("Jogador " + playerId);
-        nameLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+        String initialName = (playerId == 1) ? "Jogador 1" : "Jogador 2";
+        JLabel nameLabel = new JLabel(initialName);
+        nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
         nameLabel.setForeground(Color.WHITE);
+        namePanel.add(iconLabel);
+        namePanel.add(nameLabel);
+        // [NOVO] Salva a referência da label do nome para atualizações futuras
+        if (playerId == 1) p1NameLabel = nameLabel;
+        else p2NameLabel = nameLabel;
 
-        // Label de movimentos (Score)
+        namePanel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        // --- Painel de Jogadas (com destaque) ---
+        JPanel movesPanel = new JPanel();
+        movesPanel.setLayout(new BoxLayout(movesPanel, BoxLayout.Y_AXIS));
+        movesPanel.setBackground(new Color(45, 48, 50)); // Fundo escuro para contraste
+        // [NOVO] Adiciona borda e padding ao setor de jogadas
+        movesPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(90, 93, 95)), // Borda clara
+            BorderFactory.createEmptyBorder(4, 15, 4, 15)     // Espaçamento interno
+        ));
+
+        // Label "JOGADAS"
+        JLabel movesTitleLabel = new JLabel("JOGADAS");
+        movesTitleLabel.setFont(new Font("Arial", Font.BOLD, 10));
+        movesTitleLabel.setForeground(new Color(180, 180, 180));
+        movesTitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+
+        // Número de movimentos
         JLabel movesLabel = new JLabel("0", SwingConstants.CENTER);
         movesLabel.setForeground(fg);
         movesLabel.setFont(font);
         movesLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // [NOVO] Salva a referência para usar no updateScore
+        // Salva a referência para usar no updateScore
         if (playerId == 1) p1MovesLabel = movesLabel;
         else p2MovesLabel = movesLabel;
 
-        JPanel scoreBox = new JPanel();
-        scoreBox.setLayout(new BoxLayout(scoreBox, BoxLayout.Y_AXIS));
-        scoreBox.setBackground(bg);
-        scoreBox.add(nameLabel);
-        scoreBox.add(movesLabel); // Adiciona o número de movimentos
+        movesPanel.add(movesTitleLabel);
+        movesPanel.add(movesLabel);
 
-        panel.add(scoreBox, BorderLayout.CENTER);
+        mainPlayerPanel.add(namePanel);
+        mainPlayerPanel.add(Box.createRigidArea(new Dimension(0, 5))); // Espaçamento
+        mainPlayerPanel.add(movesPanel);
 
-        return panel;
+        // Adiciona a borda delimitadora ao redor de todo o quadro do jogador
+        mainPlayerPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(30, 30, 30)), // [NOVO] Borda geral mais escura/sutil
+            BorderFactory.createEmptyBorder(5, 10, 5, 10)         // Espaçamento interno
+        ));
+
+        return mainPlayerPanel;
     }
 
     private void setPanelName(JPanel panel, int playerId, String name) {

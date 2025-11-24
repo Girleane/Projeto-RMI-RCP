@@ -94,21 +94,34 @@ public class HalmaServer extends UnicastRemoteObject implements IHalmaServer {
     // --- Implementação da Interface RMI ---
 
     @Override
-    public synchronized int registrarCliente(IHalmaClient client, String name) throws RemoteException {
-        if (player1 == null) {
-            player1 = client;
-            p1Name = name;
-            System.out.println("Jogador 1 conectado: " + name);
-            client.receberMensagem("Aguardando Jogador 2...");
-            return 1;
-        } else if (player2 == null) {
-            player2 = client;
-            p2Name = name;
-            System.out.println("Jogador 2 conectado: " + name);
-            iniciarJogo();
-            return 2;
+    public int registrarCliente(IHalmaClient client, String name) throws RemoteException {
+        int playerId = -1;
+        boolean startGame = false;
+        synchronized (this) {
+            if (player1 == null) {
+                player1 = client;
+                p1Name = name;
+                playerId = 1;
+                System.out.println("Jogador 1 conectado: " + name);
+                client.receberMensagem("Aguardando Jogador 2...");
+            } else if (player2 == null) {
+                player2 = client;
+                p2Name = name;
+                playerId = 2;
+                System.out.println("Jogador 2 conectado: " + name);
+                startGame = true; // Marca para iniciar o jogo fora do bloco sync
+            }
         }
-        return -1; // Cheio
+
+        if (startGame) {
+            // Inicia o jogo em uma nova thread com um pequeno delay
+            // para dar tempo ao cliente 2 de construir sua UI.
+            new Thread(() -> {
+                try { Thread.sleep(200); } catch (InterruptedException e) {}
+                iniciarJogo();
+            }).start();
+        }
+        return playerId; // Retorna o ID do jogador ou -1 se o servidor estiver cheio
     }
 
     @Override
@@ -134,7 +147,7 @@ public class HalmaServer extends UnicastRemoteObject implements IHalmaServer {
             // Verifica vitória (lógica existente)
             if (board.verificarVencedor(playerId)) {
                 gameActive = false;
-                notificarVitoria(playerId);
+                notificarVitoria(playerId, true);
             } else {
                 notificarTurno();
             }
@@ -156,10 +169,27 @@ public class HalmaServer extends UnicastRemoteObject implements IHalmaServer {
     public synchronized void enviarChat(int playerId, String msg) throws RemoteException {
         String nome = (playerId == 1) ? p1Name : p2Name;
         if ("ABANDON_GAME".equals(msg)) {
-            desconectar(playerId);
+            if (!gameActive) return; // Não faz nada se o jogo não estiver ativo
+
+            int winnerId = (playerId == 1) ? 2 : 1;
+            String winnerName = (winnerId == 1) ? p1Name : p2Name;
+
+            broadcastMsg(nome + " desistiu. " + winnerName + " venceu a partida!");
+            notificarVitoria(winnerId, true); // Notifica e reinicia o jogo
         } else {
             String formatted = "[CHAT] " + nome + ": " + msg;
             broadcastMsg(formatted);
+        }
+    }
+
+    @Override
+    public synchronized void solicitarReinicio(int playerId) throws RemoteException {
+        // Apenas o jogador 1 pode solicitar o reinício para evitar chamadas duplicadas.
+        // E só reinicia se o jogo estiver inativo (após uma vitória)
+        // e ambos os jogadores ainda estiverem conectados.
+        if (playerId == 1 && !gameActive && player1 != null && player2 != null) {
+            System.out.println("Jogador 1 solicitou reinicio. Reiniciando o jogo...");
+            iniciarJogo();
         }
     }
 
@@ -193,9 +223,18 @@ public class HalmaServer extends UnicastRemoteObject implements IHalmaServer {
         p2Moves = 0;
         board = new HalmaBoard();
 
+        // Notifica os clientes sobre o início e quem são os jogadores
+        try {
+            if (player1 != null) player1.notificarInicioJogo(p1Name, p2Name);
+            if (player2 != null) player2.notificarInicioJogo(p1Name, p2Name);
+        } catch (RemoteException e) {
+            System.err.println("Erro ao notificar inicio de jogo: " + e.getMessage());
+        }
+
         broadcastMsg("JOGO INICIADO!");
         broadcastUpdate(null);
         notificarTurno();
+        broadcastScore(); // Garante que o placar seja zerado para os clientes
     }
 
     private void resetGame() {
@@ -232,7 +271,7 @@ public class HalmaServer extends UnicastRemoteObject implements IHalmaServer {
         }
     }
 
-    private void notificarVitoria(int winnerId) {
+    private void notificarVitoria(int winnerId, boolean reiniciar) {
         System.out.println("Jogador " + winnerId + " venceu o jogo!");
         broadcastMsg("O Jogador " + winnerId + " venceu!");
 
@@ -251,12 +290,13 @@ public class HalmaServer extends UnicastRemoteObject implements IHalmaServer {
 
         // Opcional: Resetar o jogo automaticamente ou encerrar
         gameActive = false;
+
     }
 
     private void broadcastMsg(String msg) {
         try {
-            if (player1 != null) player1.receberMensagem("[SISTEMA] " + msg);
-            if (player2 != null) player2.receberMensagem("[SISTEMA] " + msg);
+            if (player1 != null) player1.receberMensagem(msg);
+            if (player2 != null) player2.receberMensagem(msg);
         } catch (RemoteException e) {
         }
     }

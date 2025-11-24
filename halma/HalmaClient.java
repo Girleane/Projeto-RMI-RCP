@@ -127,6 +127,22 @@ public class HalmaClient extends UnicastRemoteObject implements IHalmaClient {
             if (ui != null) {
                 ui.showWin(idVencedor);
                 ui.disableTurn();
+                // APÓS mostrar a vitória, solicita o reinício ao servidor.
+                try {
+                    server.solicitarReinicio(myId);
+                } catch (RemoteException ex) {
+                    // Ignora, o servidor pode ter caído.
+                }
+            }
+        });
+    }
+
+    @Override
+    public void notificarInicioJogo(String p1Name, String p2Name) throws RemoteException {
+        SwingUtilities.invokeLater(() -> {
+            if (ui != null) {
+                ui.setPlayerNameLabel(1, p1Name);
+                ui.setPlayerNameLabel(2, p2Name);
             }
         });
     }
@@ -157,9 +173,9 @@ public class HalmaClient extends UnicastRemoteObject implements IHalmaClient {
         frame.setLayout(new BorderLayout(10, 10));
         frame.setLocationRelativeTo(null);
 
-        final Color bgColor = new Color(40, 44, 52);
+        final Color bgColor = new Color(60, 63, 65); // Cor do cabeçalho do jogo
         final Color fgColor = new Color(255, 255, 255);
-        final Color accentColor = new Color(102, 217, 239);
+        final Color accentColor = new Color(170, 120, 70); // Cor do quadrado claro do tabuleiro
 
         final JPanel mainPanel = new JPanel();
         mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
